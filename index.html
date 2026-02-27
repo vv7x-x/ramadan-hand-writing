@@ -1,126 +1,466 @@
 <!DOCTYPE html>
-<html>
+<html lang="ar" dir="rtl">
+
 <head>
-  <title>ramadan pen</title>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-  <style>
-    body { margin: 0; background: #050301; overflow: hidden; }
-    video { display: none; }
-    canvas { width: 100%; height: 100%; transform: scaleX(-1); position: absolute; z-index: 1; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>فن الرسم باليد | AI Hand Pen</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=Noto+Sans+Arabic:wght@300;400;700&display=swap');
+
+        :root {
+            --accent: #F5D061;
+            --bg: #050301;
+            --glass: rgba(255, 255, 255, 0.1);
+            --glass-border: rgba(255, 255, 255, 0.2);
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            overflow: hidden;
+            font-family: 'Noto Sans Arabic', 'Outfit', sans-serif;
+            color: white;
+        }
+
+        video {
+            display: none;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1);
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        .ui-overlay {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            pointer-events: none;
+        }
+
+        .panel {
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            padding: 15px;
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: all;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .section-title {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.7;
+            margin-bottom: 5px;
+        }
+
+        .colors {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .color-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .color-btn.active {
+            border-color: white;
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+        }
+
+        .brush-preview {
+            width: 100%;
+            height: 40px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .brush-dot {
+            background: var(--accent);
+            border-radius: 50%;
+            transition: width 0.1s, height 0.1s;
+        }
+
+        .clear-btn,
+        .undo-btn,
+        .download-btn {
+            background: var(--glass);
+            color: white;
+            border: 1px solid var(--glass-border);
+            padding: 12px 15px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.3s;
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            font-size: 0.8rem;
+            flex: 1;
+        }
+
+        .clear-btn {
+            background: rgba(255, 59, 48, 0.25);
+            color: #ff453a;
+        }
+
+        .undo-btn {
+            background: rgba(10, 132, 255, 0.25);
+            color: #0a84ff;
+        }
+
+        .download-btn {
+            background: rgba(48, 209, 88, 0.25);
+            color: #30d158;
+        }
+
+        .clear-btn:active,
+        .undo-btn:active,
+        .download-btn:active {
+            transform: scale(0.95);
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .hud-bottom {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 20;
+            display: flex;
+            gap: 10px;
+            padding: 15px;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+            pointer-events: all;
+        }
+
+        #status {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            font-size: 0.9rem;
+            font-weight: 300;
+            background: var(--glass);
+            padding: 5px 15px;
+            border-radius: 10px;
+            border: 1px solid var(--glass-border);
+        }
+
+        .brush-size-label {
+            position: absolute;
+            bottom: -20px;
+            font-size: 0.7rem;
+            opacity: 0.6;
+        }
+    </style>
 </head>
+
 <body>
-  <video id="vid"></video>
-  <canvas id="c"></canvas>
-  <script>
-    var vid = document.getElementById('vid');
-    var c = document.getElementById('c');
-    var ctx = c.getContext('2d');
-    var arr = [];
-    var cur = [];
-    var shift = false;
-    var draw = false;
-    var sx = null;
-    var sy = null;
+    <div id="status">جاري تشغيل الكاميرا...</div>
 
-    window.onkeydown = function(e) {
-      if (e.key == 'Shift') shift = true;
-      if (e.code == 'Space') arr = [];
-    }
-    
-    window.onkeyup = function(e) {
-      if (e.key == 'Shift') shift = false;
-    }
+    <div class="ui-overlay">
+        <div class="panel">
+            <div class="section-title">الألوان</div>
+            <div class="colors" id="colorPalette">
+                <div class="color-btn active" style="background: #F5D061;" data-color="#F5D061"></div>
+                <div class="color-btn" style="background: #E63946;" data-color="#E63946"></div>
+                <div class="color-btn" style="background: #A8DADC;" data-color="#A8DADC"></div>
+                <div class="color-btn" style="background: #457B9D;" data-color="#457B9D"></div>
+                <div class="color-btn" style="background: #1D3557;" data-color="#1D3557"></div>
+                <div class="color-btn" style="background: #00FF88;" data-color="#00FF88"></div>
+                <div class="color-btn" style="background: #FF00FF;" data-color="#FF00FF"></div>
+                <div class="color-btn" style="background: #FFFFFF;" data-color="#FFFFFF"></div>
+                <div class="color-btn" style="background: #000000; border: 1px solid white;" data-color="eraser"
+                    title="ممحاة">🧼</div>
+            </div>
+        </div>
 
-    function run(res) {
-      c.width = window.innerWidth;
-      c.height = window.innerHeight;
-      ctx.drawImage(res.image, 0, 0, c.width, c.height);
-      ctx.fillStyle = 'rgba(10, 6, 2, 0.85)';
-      ctx.fillRect(0, 0, c.width, c.height);
+        <div class="panel">
+            <div class="section-title">حجم الفرشاة</div>
+            <div class="brush-preview">
+                <div class="brush-dot" id="brushDot" style="width: 6px; height: 6px;"></div>
+            </div>
+        </div>
+    </div>
 
-      ctx.shadowColor = '#F5D061';
-      ctx.shadowBlur = 15;
-      ctx.strokeStyle = '#F5D061';
-      ctx.lineWidth = 6;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
+    <div class="hud-bottom">
+        <button class="undo-btn" onclick="undoLastStroke()">↩️ تراجع</button>
+        <button class="clear-btn" onclick="clearCanvas()">🗑️ مسح</button>
+        <button class="download-btn" onclick="downloadCanvas()">💾 حفظ</button>
+    </div>
 
-      for (var i = 0; i < arr.length; i++) {
-        ctx.beginPath();
-        for (var j = 0; j < arr[i].length; j++) {
-          if (j == 0) ctx.moveTo(arr[i][j].x, arr[i][j].y);
-          else ctx.lineTo(arr[i][j].x, arr[i][j].y);
+    <video id="vid"></video>
+    <canvas id="c"></canvas>
+
+    <script>
+        const vid = document.getElementById('vid');
+        const c = document.getElementById('c');
+        const ctx = c.getContext('2d');
+        const brushDot = document.getElementById('brushDot');
+        const statusEl = document.getElementById('status');
+
+        let strokes = []; // { points: [], color: string, width: number }
+        let sparkles = []; // { x, y, size, life, color }
+        let currentStroke = null;
+        let currentColor = '#F5D061';
+        let currentLineWidth = 6;
+
+        let lastDrawPos = null;
+        let smoothX = null;
+        let smoothY = null;
+
+        // Initialize color palette
+        document.querySelectorAll('.color-btn').forEach(btn => {
+            btn.onclick = () => {
+                document.querySelector('.color-btn.active').classList.remove('active');
+                btn.classList.add('active');
+                currentColor = btn.dataset.color;
+                brushDot.style.background = currentColor;
+            };
+        });
+
+        function clearCanvas() {
+            strokes = [];
         }
-        ctx.stroke();
-      }
 
-      if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
-        var lm = res.multiHandLandmarks[0];
-        drawConnectors(ctx, lm, HAND_CONNECTIONS, {color: 'rgba(245, 208, 97, 0.3)', lineWidth: 2});
-        drawLandmarks(ctx, lm, {color: '#FFFFFF', lineWidth: 1, radius: 2});
-
-        var ind = lm[8];
-        var rx = ind.x * c.width;
-        var ry = ind.y * c.height;
-
-        if (sx == null) {
-          sx = rx; 
-          sy = ry;
-        } else {
-          sx += (rx - sx) * 0.45;
-          sy += (ry - sy) * 0.45;
+        function undoLastStroke() {
+            strokes.pop();
         }
 
-        ctx.beginPath();
-        ctx.arc(sx, sy, 6, 0, 2 * Math.PI);
-        if (shift) { 
-          ctx.fillStyle = '#FFFFFF'; 
-        } else { 
-          ctx.fillStyle = 'rgba(245, 208, 97, 0.4)'; 
+        function downloadCanvas() {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = c.width;
+            tempCanvas.height = c.height;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            // Draw current canvas content
+            tempCtx.drawImage(c, 0, 0);
+
+            const link = document.createElement('a');
+            link.download = 'art-' + Date.now() + '.png';
+            link.href = tempCanvas.toDataURL('image/png');
+            link.click();
         }
-        ctx.fill();
 
-        if (shift) {
-          if (!draw) {
-            draw = true;
-            cur = [];
-            arr.push(cur);
-          }
-          cur.push({x: sx, y: sy});
-        } else {
-          draw = false;
+        // Mobile gestures are enough, removed window.onkeydown
+
+        function getDistance(p1, p2) {
+            return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
         }
-      } else {
-        draw = false;
-        sx = null;
-      }
-    }
 
-    var h = new Hands({
-      locateFile: (file) => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-      }
-    });
-    
-    h.setOptions({ 
-      maxNumHands: 1, 
-      modelComplexity: 1, 
-      minDetectionConfidence: 0.5, 
-      minTrackingConfidence: 0.5 
-    });
-    
-    h.onResults(run);
+        function run(res) {
+            c.width = window.innerWidth;
+            c.height = window.innerHeight;
 
-    var cam = new Camera(vid, {
-      onFrame: async () => { await h.send({image: vid}); },
-      width: 1280, 
-      height: 720
-    });
-    
-    cam.start();
-  </script>
+            // Draw background and mirror camera image
+            ctx.save();
+            ctx.scale(-1, 1);
+            ctx.translate(-c.width, 0);
+            ctx.drawImage(res.image, 0, 0, c.width, c.height);
+            ctx.restore();
+
+            // Dark overlay for focus
+            ctx.fillStyle = 'rgba(5, 3, 1, 0.85)';
+            ctx.fillRect(0, 0, c.width, c.height);
+
+            // Draw all previous strokes
+            strokes.forEach(stroke => {
+                if (stroke.points.length < 2) return;
+
+                ctx.beginPath();
+                ctx.strokeStyle = stroke.color;
+                ctx.lineWidth = stroke.width;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.shadowColor = stroke.color;
+                ctx.shadowBlur = 10;
+
+                ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+                for (let i = 1; i < stroke.points.length; i++) {
+                    ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+                }
+                ctx.stroke();
+            });
+
+            // Update and draw sparkles
+            sparkles = sparkles.filter(s => s.life > 0);
+            sparkles.forEach(s => {
+                ctx.beginPath();
+                ctx.fillStyle = s.color;
+                ctx.globalAlpha = s.life;
+                ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+                ctx.fill();
+                s.life -= 0.05;
+                s.y += 0.5; // Slight gravity
+            });
+            ctx.globalAlpha = 1.0;
+
+            if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
+                statusEl.innerText = "تم رصد اليد ✨";
+                const lm = res.multiHandLandmarks[0];
+
+                // Mirror the coordinates for the canvas
+                const indexTip = lm[8];
+                const thumbTip = lm[4];
+                const middleTip = lm[12];
+
+                const rx = (1 - indexTip.x) * c.width; // Mirroring manually
+                const ry = indexTip.y * c.height;
+
+                // Smoothing
+                if (smoothX === null) {
+                    smoothX = rx;
+                    smoothY = ry;
+                } else {
+                    smoothX += (rx - smoothX) * 0.4;
+                    smoothY += (ry - smoothY) * 0.4;
+                }
+
+                // Gesture Detection
+                const pinchDist = getDistance(indexTip, thumbTip);
+                const sizeDist = getDistance(thumbTip, middleTip);
+
+                // Update brush size based on thumb-middle distance (Zoom effect)
+                // Normalize 0.05 - 0.2 to 2 - 40
+                let newWidth = (sizeDist - 0.05) / (0.25 - 0.05) * 40;
+                newWidth = Math.max(2, Math.min(60, newWidth));
+                currentLineWidth = currentLineWidth * 0.7 + newWidth * 0.3; // smoothing
+                brushDot.style.width = currentLineWidth + 'px';
+                brushDot.style.height = currentLineWidth + 'px';
+
+                const isPinching = pinchDist < 0.04;
+
+                // Visual pointer
+                ctx.beginPath();
+                ctx.arc(smoothX, smoothY, currentLineWidth / 2 + 5, 0, 2 * Math.PI);
+                ctx.strokeStyle = isPinching ? currentColor : 'rgba(255, 255, 255, 0.4)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Sparkle effect
+                if (isPinching && currentColor !== 'eraser') {
+                    for (let i = 0; i < 2; i++) {
+                        sparkles.push({
+                            x: smoothX + (Math.random() - 0.5) * 10,
+                            y: smoothY + (Math.random() - 0.5) * 10,
+                            size: Math.random() * 3 + 1,
+                            life: 1.0,
+                            color: currentColor
+                        });
+                    }
+                }
+
+                // UI Interaction: Color selection via hover
+                const colorBtns = document.querySelectorAll('.color-btn');
+                colorBtns.forEach(btn => {
+                    const rect = btn.getBoundingClientRect();
+                    // Check if pointer is over the button (normalized to client space)
+                    if (rx > rect.left && rx < rect.right && ry > rect.top && ry < rect.bottom) {
+                        btn.style.transform = 'scale(1.2)';
+                        if (isPinching) {
+                            btn.click(); // Trigger click logic
+                        }
+                    } else {
+                        btn.style.transform = '';
+                    }
+                });
+
+                // Subtle Hand visualization for feedback
+                drawConnectors(ctx, lm, HAND_CONNECTIONS, { color: 'rgba(255, 255, 255, 0.1)', lineWidth: 1 });
+                drawLandmarks(ctx, lm, { color: 'rgba(255, 255, 255, 0.2)', lineWidth: 0.5, radius: 1 });
+
+                if (isPinching) {
+                    if (!currentStroke) {
+                        currentStroke = {
+                            points: [],
+                            color: currentColor === 'eraser' ? 'rgba(5, 3, 1, 1)' : currentColor,
+                            width: currentLineWidth,
+                            isEraser: currentColor === 'eraser'
+                        };
+                        strokes.push(currentStroke);
+                    }
+                    currentStroke.points.push({ x: smoothX, y: smoothY });
+                } else {
+                    currentStroke = null;
+                }
+
+                // Highlight color selection if hovering top right (UI interaction)
+                // This could be improved but simple hovering over buttons works if we know their screen positions
+                // For now, manual clicking handles color, but let's stick to hand gestures for drawing/sizing.
+            } else {
+                statusEl.innerText = "ابحث عن يد... 🔍";
+                currentStroke = null;
+                smoothX = null;
+                smoothY = null;
+            }
+        }
+
+        const hands = new Hands({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            }
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.7
+        });
+
+        hands.onResults(run);
+
+        const camera = new Camera(vid, {
+            onFrame: async () => {
+                await hands.send({ image: vid });
+            },
+            width: window.innerWidth > window.innerHeight ? 1280 : 720,
+            height: window.innerWidth > window.innerHeight ? 720 : 1280,
+            facingMode: 'user'
+        });
+
+        camera.start().catch(err => {
+            statusEl.innerText = "خطأ في الكاميرا: " + err.message;
+        });
+    </script>
 </body>
+
 </html>
