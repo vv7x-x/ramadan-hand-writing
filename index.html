@@ -1,165 +1,166 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Ramadan Air Pen</title>
+<title>Air Hand Paint</title>
 
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 
-  <style>
-    body {
-      margin: 0;
-      background: #050301;
-      overflow: hidden;
-      font-family: Arial;
-    }
-
-    video { display: none; }
-
-    canvas {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      transform: scaleX(-1);
-    }
-
-    .color-picker {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 15px;
-      z-index: 5;
-    }
-
-    .color {
-      width: 35px;
-      height: 35px;
-      border-radius: 50%;
-      cursor: pointer;
-      border: 3px solid white;
-      transition: 0.2s;
-    }
-
-    .color:hover {
-      transform: scale(1.2);
-    }
-  </style>
+<style>
+body{
+  margin:0;
+  overflow:hidden;
+  background:#050301;
+}
+video{display:none;}
+canvas{
+  position:absolute;
+  width:100%;
+  height:100%;
+  transform:scaleX(-1);
+}
+</style>
 </head>
 <body>
 
 <video id="vid"></video>
 <canvas id="c"></canvas>
 
-<div class="color-picker">
-  <div class="color" style="background:#F5D061" data-color="#F5D061"></div>
-  <div class="color" style="background:#ff4d4d" data-color="#ff4d4d"></div>
-  <div class="color" style="background:#4da6ff" data-color="#4da6ff"></div>
-  <div class="color" style="background:#00cc66" data-color="#00cc66"></div>
-  <div class="color" style="background:#ffffff" data-color="#ffffff"></div>
-</div>
-
 <script>
 
-var vid = document.getElementById('vid');
-var c = document.getElementById('c');
-var ctx = c.getContext('2d');
+var vid = document.getElementById("vid");
+var c = document.getElementById("c");
+var ctx = c.getContext("2d");
 
-function resizeCanvas() {
+function resize(){
   c.width = window.innerWidth;
   c.height = window.innerHeight;
 }
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
+window.addEventListener("resize",resize);
+resize();
 
-var strokes = [];
-var currentStroke = [];
-var drawing = false;
-var smoothX = null;
-var smoothY = null;
-var currentColor = "#F5D061";
+var strokes=[];
+var currentStroke=null;
+var drawing=false;
+var smoothX=null;
+var smoothY=null;
+var currentColor="#F5D061";
 
-// 🎨 تغيير اللون
-document.querySelectorAll(".color").forEach(btn => {
-  btn.onclick = function() {
-    currentColor = this.dataset.color;
-  }
-});
+// 🎨 لوحة ألوان علوية
+var palette = [
+  {color:"#F5D061", x:0},
+  {color:"#ff4d4d", x:0},
+  {color:"#4da6ff", x:0},
+  {color:"#00cc66", x:0},
+  {color:"#ffffff", x:0}
+];
 
-// ======= الرسم =======
-function run(res) {
+function drawPalette(){
+  var spacing = 70;
+  var start = c.width/2 - ((palette.length-1)*spacing)/2;
+
+  palette.forEach((p,i)=>{
+    p.x = start + i*spacing;
+    p.y = 80;
+
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,25,0,Math.PI*2);
+    ctx.fillStyle=p.color;
+    ctx.fill();
+
+    if(currentColor==p.color){
+      ctx.lineWidth=4;
+      ctx.strokeStyle="#fff";
+      ctx.stroke();
+    }
+  });
+}
+
+function distance(a,b){
+  var dx=a.x-b.x;
+  var dy=a.y-b.y;
+  return Math.sqrt(dx*dx+dy*dy);
+}
+
+function run(res){
 
   ctx.clearRect(0,0,c.width,c.height);
 
-  // خلفية غامقة
-  ctx.fillStyle = "rgba(5,3,1,0.9)";
+  // خلفية
+  ctx.fillStyle="rgba(5,3,1,0.92)";
   ctx.fillRect(0,0,c.width,c.height);
 
-  // رسم كل الخطوط السابقة
-  ctx.lineWidth = 6;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.shadowBlur = 20;
-  ctx.globalCompositeOperation = "lighter";
+  ctx.lineWidth=6;
+  ctx.lineCap="round";
+  ctx.lineJoin="round";
+  ctx.shadowBlur=20;
+  ctx.globalCompositeOperation="lighter";
 
-  strokes.forEach(stroke => {
-    ctx.strokeStyle = stroke.color;
-    ctx.shadowColor = stroke.color;
+  // رسم الخطوط
+  strokes.forEach(s=>{
+    ctx.strokeStyle=s.color;
+    ctx.shadowColor=s.color;
     ctx.beginPath();
-    stroke.points.forEach((p,i) => {
+    s.points.forEach((p,i)=>{
       if(i==0) ctx.moveTo(p.x,p.y);
       else ctx.lineTo(p.x,p.y);
     });
     ctx.stroke();
   });
 
+  drawPalette();
+
   if(res.multiHandLandmarks && res.multiHandLandmarks.length>0){
 
-    var lm = res.multiHandLandmarks[0];
+    var lm=res.multiHandLandmarks[0];
 
-    var index = lm[8];
-    var thumb = lm[4];
-    var middle = lm[12];
-    var ring = lm[16];
-    var pinky = lm[20];
+    var index=lm[8];
+    var thumb=lm[4];
+    var middle=lm[12];
+    var ring=lm[16];
+    var pinky=lm[20];
 
-    var rx = index.x * c.width;
-    var ry = index.y * c.height;
+    var rx=index.x*c.width;
+    var ry=index.y*c.height;
 
     if(smoothX==null){
-      smoothX = rx;
-      smoothY = ry;
-    } else {
-      smoothX += (rx - smoothX)*0.4;
-      smoothY += (ry - smoothY)*0.4;
+      smoothX=rx;
+      smoothY=ry;
+    }else{
+      smoothX+=(rx-smoothX)*0.4;
+      smoothY+=(ry-smoothY)*0.4;
     }
 
-    // مؤشر
     ctx.beginPath();
-    ctx.arc(smoothX,smoothY,6,0,Math.PI*2);
-    ctx.fillStyle = currentColor;
+    ctx.arc(smoothX,smoothY,8,0,Math.PI*2);
+    ctx.fillStyle=currentColor;
     ctx.fill();
 
-    function dist(a,b){
-      var dx=a.x-b.x;
-      var dy=a.y-b.y;
-      return Math.sqrt(dx*dx+dy*dy);
-    }
+    var pinch=distance(index,thumb);
 
-    var pinch = dist(index,thumb);
-    var openPalm =
-      dist(index,middle)>0.07 &&
-      dist(index,ring)>0.1 &&
-      dist(index,pinky)>0.12;
+    var openPalm=
+      distance(index,middle)>0.07 &&
+      distance(index,ring)>0.1 &&
+      distance(index,pinky)>0.12;
+
+    // 🎨 اختيار لون باللمس
+    palette.forEach(p=>{
+      var dx=smoothX-p.x;
+      var dy=smoothY-p.y;
+      var d=Math.sqrt(dx*dx+dy*dy);
+      if(d<25 && pinch<0.05){
+        currentColor=p.color;
+        drawing=false;
+      }
+    });
 
     // ✍️ رسم
-    if(pinch < 0.05){
+    if(pinch<0.05 && smoothY>120){
 
       if(!drawing){
-        drawing = true;
-        currentStroke = { color: currentColor, points: [] };
+        drawing=true;
+        currentStroke={color:currentColor,points:[]};
         strokes.push(currentStroke);
       }
 
@@ -168,40 +169,36 @@ function run(res) {
 
     // 🧽 مسح
     else if(openPalm){
-      strokes = [];
-      drawing = false;
+      strokes=[];
+      drawing=false;
     }
 
     else{
-      drawing = false;
+      drawing=false;
     }
 
-  } else {
-    drawing = false;
-    smoothX = null;
+  }else{
+    drawing=false;
+    smoothX=null;
   }
-
 }
 
-// ======= MediaPipe Setup =======
-var hands = new Hands({
-  locateFile: file =>
-    `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+// MediaPipe
+var hands=new Hands({
+  locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
 });
 
 hands.setOptions({
-  maxNumHands: 1,
-  modelComplexity: 1,
-  minDetectionConfidence: 0.7,
-  minTrackingConfidence: 0.7
+  maxNumHands:1,
+  modelComplexity:1,
+  minDetectionConfidence:0.7,
+  minTrackingConfidence:0.7
 });
 
 hands.onResults(run);
 
-var camera = new Camera(vid,{
-  onFrame: async () => {
-    await hands.send({image:vid});
-  },
+var camera=new Camera(vid,{
+  onFrame:async()=>{await hands.send({image:vid});},
   width:1280,
   height:720
 });
