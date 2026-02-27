@@ -1,17 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Air Hand Paint - Camera Mode</title>
+<title>Test Air Draw</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 
 <style>
-body{
-  margin:0;
-  overflow:hidden;
-}
+body{margin:0;overflow:hidden;}
 video{
   position:absolute;
   width:100%;
@@ -30,163 +27,70 @@ canvas{
 </head>
 <body>
 
-<video id="vid" autoplay playsinline></video>
-<canvas id="c"></canvas>
+<video id="video" autoplay playsinline></video>
+<canvas id="canvas"></canvas>
 
 <script>
-
-var vid=document.getElementById("vid");
-var c=document.getElementById("c");
-var ctx=c.getContext("2d");
+const video=document.getElementById("video");
+const canvas=document.getElementById("canvas");
+const ctx=canvas.getContext("2d");
 
 function resize(){
-  c.width=window.innerWidth;
-  c.height=window.innerHeight;
+  canvas.width=window.innerWidth;
+  canvas.height=window.innerHeight;
 }
 window.addEventListener("resize",resize);
 resize();
 
-var strokes=[];
-var currentStroke=null;
-var drawing=false;
-var smoothX=null;
-var smoothY=null;
-var currentColor="#ff0000";
-
-// 🎨 لوحة ألوان أعلى الشاشة
-var palette=[
-  {color:"#ff0000"},
-  {color:"#00ff00"},
-  {color:"#0099ff"},
-  {color:"#ffff00"},
-  {color:"#ffffff"}
-];
-
-function drawPalette(){
-  var spacing=70;
-  var start=c.width/2-((palette.length-1)*spacing)/2;
-
-  palette.forEach((p,i)=>{
-    p.x=start+i*spacing;
-    p.y=80;
-
-    ctx.beginPath();
-    ctx.arc(p.x,p.y,25,0,Math.PI*2);
-    ctx.fillStyle=p.color;
-    ctx.fill();
-
-    if(currentColor==p.color){
-      ctx.lineWidth=4;
-      ctx.strokeStyle="#000";
-      ctx.stroke();
-    }
-  });
-}
+let strokes=[];
+let drawing=false;
 
 function distance(a,b){
-  var dx=a.x-b.x;
-  var dy=a.y-b.y;
-  return Math.sqrt(dx*dx+dy*dy);
+  return Math.hypot(a.x-b.x,a.y-b.y);
 }
 
-function run(res){
+function onResults(results){
 
-  ctx.clearRect(0,0,c.width,c.height);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
   // رسم الخطوط
-  ctx.lineWidth=6;
+  ctx.lineWidth=5;
   ctx.lineCap="round";
-  ctx.lineJoin="round";
-  ctx.shadowBlur=10;
-  ctx.globalCompositeOperation="source-over";
+  ctx.strokeStyle="red";
 
-  strokes.forEach(s=>{
-    ctx.strokeStyle=s.color;
+  strokes.forEach(stroke=>{
     ctx.beginPath();
-    s.points.forEach((p,i)=>{
-      if(i==0) ctx.moveTo(p.x,p.y);
+    stroke.forEach((p,i)=>{
+      if(i===0) ctx.moveTo(p.x,p.y);
       else ctx.lineTo(p.x,p.y);
     });
     ctx.stroke();
   });
 
-  drawPalette();
+  if(results.multiHandLandmarks.length>0){
 
-  if(res.multiHandLandmarks && res.multiHandLandmarks.length>0){
+    const lm=results.multiHandLandmarks[0];
+    const index=lm[8];
+    const thumb=lm[4];
 
-    var lm=res.multiHandLandmarks[0];
+    const x=index.x*canvas.width;
+    const y=index.y*canvas.height;
 
-    var index=lm[8];
-    var thumb=lm[4];
-    var middle=lm[12];
-    var ring=lm[16];
-    var pinky=lm[20];
+    const pinch=distance(index,thumb);
 
-    var rx=index.x*c.width;
-    var ry=index.y*c.height;
-
-    if(smoothX==null){
-      smoothX=rx;
-      smoothY=ry;
-    }else{
-      smoothX+=(rx-smoothX)*0.4;
-      smoothY+=(ry-smoothY)*0.4;
-    }
-
-    // مؤشر
-    ctx.beginPath();
-    ctx.arc(smoothX,smoothY,8,0,Math.PI*2);
-    ctx.fillStyle=currentColor;
-    ctx.fill();
-
-    var pinch=distance(index,thumb);
-
-    var openPalm=
-      distance(index,middle)>0.07 &&
-      distance(index,ring)>0.1 &&
-      distance(index,pinky)>0.12;
-
-    // 🎨 اختيار لون
-    palette.forEach(p=>{
-      var dx=smoothX-p.x;
-      var dy=smoothY-p.y;
-      var d=Math.sqrt(dx*dx+dy*dy);
-      if(d<25 && pinch<0.05){
-        currentColor=p.color;
-        drawing=false;
-      }
-    });
-
-    // ✍️ رسم
-    if(pinch<0.05 && smoothY>120){
-
+    if(pinch<0.05){
       if(!drawing){
         drawing=true;
-        currentStroke={color:currentColor,points:[]};
-        strokes.push(currentStroke);
+        strokes.push([]);
       }
-
-      currentStroke.points.push({x:smoothX,y:smoothY});
-    }
-
-    // 🧽 مسح
-    else if(openPalm){
-      strokes=[];
+      strokes[strokes.length-1].push({x,y});
+    }else{
       drawing=false;
     }
-
-    else{
-      drawing=false;
-    }
-
-  }else{
-    drawing=false;
-    smoothX=null;
   }
 }
 
-// MediaPipe
-var hands=new Hands({
+const hands=new Hands({
   locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
 });
 
@@ -197,16 +101,16 @@ hands.setOptions({
   minTrackingConfidence:0.7
 });
 
-hands.onResults(run);
+hands.onResults(onResults);
 
-var camera=new Camera(vid,{
-  onFrame:async()=>{await hands.send({image:vid});},
+const camera=new Camera(video,{
+  onFrame:async()=>{await hands.send({image:video});},
   width:1280,
   height:720
 });
 
 camera.start();
-
 </script>
+
 </body>
 </html>
