@@ -298,13 +298,12 @@
             ctx.restore();
 
             // Dark overlay for focus
-            ctx.fillStyle = 'rgba(5, 3, 1, 0.85)';
+            ctx.fillStyle = 'rgba(5, 3, 1, 0.82)';
             ctx.fillRect(0, 0, c.width, c.height);
 
             // Draw all previous strokes
             strokes.forEach(stroke => {
                 if (stroke.points.length < 2) return;
-
                 ctx.beginPath();
                 ctx.strokeStyle = stroke.color;
                 ctx.lineWidth = stroke.width;
@@ -312,7 +311,6 @@
                 ctx.lineJoin = 'round';
                 ctx.shadowColor = stroke.color;
                 ctx.shadowBlur = 10;
-
                 ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
                 for (let i = 1; i < stroke.points.length; i++) {
                     ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
@@ -333,87 +331,100 @@
             });
             ctx.globalAlpha = 1.0;
 
-            if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
-                statusEl.innerText = "تم رصد اليد ✨";
-                const lm = res.multiHandLandmarks[0];
+            function isFingerExtended(lm, fingerIdx) {
+                const tips = [4, 8, 12, 16, 20];
+                const joints = [2, 6, 10, 14, 18];
+                if (fingerIdx === 0) { // Thumb
+                    return Math.abs(lm[4].x - lm[2].x) > 0.08 || Math.abs(lm[4].z - lm[2].z) > 0.08;
+                }
+                return lm[tips[fingerIdx]].y < lm[joints[fingerIdx]].y;
+            }
 
-                // Mirror the coordinates for the canvas
+            function countFingers(lm) {
+                let count = 0;
+                for (let i = 0; i < 5; i++) {
+                    if (isFingerExtended(lm, i)) count++;
+                }
+                return count;
+            }
+
+            if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
+                const lm = res.multiHandLandmarks[0];
                 const indexTip = lm[8];
                 const thumbTip = lm[4];
                 const middleTip = lm[12];
+                const pinkyTip = lm[20];
 
-                const rx = (1 - indexTip.x) * c.width; // Mirroring manually
+                const rx = (1 - indexTip.x) * c.width;
                 const ry = indexTip.y * c.height;
 
-                // Smoothing
-                if (smoothX === null) {
-                    smoothX = rx;
-                    smoothY = ry;
-                } else {
-                    smoothX += (rx - smoothX) * 0.4;
-                    smoothY += (ry - smoothY) * 0.4;
+                if (smoothX === null) { smoothX = rx; smoothY = ry; }
+                else { smoothX += (rx - smoothX) * 0.4; smoothY += (ry - smoothY) * 0.4; }
+
+                const pinchDist = getDistance(indexTip, thumbTip);
+                const sizeGestureDist = getDistance(thumbTip, middleTip);
+
+                const isPinching = pinchDist < 0.045;
+                const isSizeGesture = sizeGestureDist < 0.045;
+
+                // 1. Color Selection (Hold number of fingers for a moment)
+                const fingers = countFingers(lm);
+                if (!isPinching && !isSizeGesture && fingers > 0) {
+                    const palette = ['#F5D061', '#E63946', '#A8DADC', '#00FF88', '#FF00FF'];
+                    if (fingers <= palette.length) {
+                        const newColor = palette[fingers - 1];
+                        if (currentColor !== newColor) {
+                            currentColor = newColor;
+                            document.querySelectorAll('.color-btn').forEach(btn => {
+                                btn.classList.toggle('active', btn.dataset.color === currentColor);
+                            });
+                            brushDot.style.background = currentColor;
+                            statusEl.innerText = "لون جديد: " + (fingers);
+                        }
+                    } else if (fingers === 5) {
+                        // All fingers = Toggle Eraser
+                        if (currentColor !== 'eraser') {
+                            currentColor = 'eraser';
+                            statusEl.innerText = "الممحاة 🧼";
+                            brushDot.style.background = "#000";
+                        }
+                    }
                 }
 
-                // Gesture Detection
-                const pinchDist = getDistance(indexTip, thumbTip);
-                const sizeDist = getDistance(thumbTip, middleTip);
+                // 2. Size Adjustment (Only when pinching Thumb + Middle)
+                if (isSizeGesture && !isPinching) {
+                    // Use distance from thumb to pinky to set size
+                    let newWidth = getDistance(thumbTip, pinkyTip) * 300;
+                    newWidth = Math.max(2, Math.min(80, newWidth));
+                    currentLineWidth = currentLineWidth * 0.8 + newWidth * 0.2;
+                    brushDot.style.width = currentLineWidth + 'px';
+                    brushDot.style.height = currentLineWidth + 'px';
+                    statusEl.innerText = "تعديل الحجم... 📏";
+                }
 
-                // Update brush size based on thumb-middle distance (Zoom effect)
-                // Normalize 0.05 - 0.2 to 2 - 40
-                let newWidth = (sizeDist - 0.05) / (0.25 - 0.05) * 40;
-                newWidth = Math.max(2, Math.min(60, newWidth));
-                currentLineWidth = currentLineWidth * 0.7 + newWidth * 0.3; // smoothing
-                brushDot.style.width = currentLineWidth + 'px';
-                brushDot.style.height = currentLineWidth + 'px';
-
-                const isPinching = pinchDist < 0.04;
-
-                // Visual pointer
+                // Visual Pointer
                 ctx.beginPath();
                 ctx.arc(smoothX, smoothY, currentLineWidth / 2 + 5, 0, 2 * Math.PI);
-                ctx.strokeStyle = isPinching ? currentColor : 'rgba(255, 255, 255, 0.4)';
-                ctx.lineWidth = 2;
+                ctx.strokeStyle = isPinching ? currentColor : (isSizeGesture ? '#007aff' : 'rgba(255, 255, 255, 0.4)');
+                ctx.lineWidth = 3;
                 ctx.stroke();
 
-                // Sparkle effect
+                // Sparkles
                 if (isPinching && currentColor !== 'eraser') {
                     for (let i = 0; i < 2; i++) {
                         sparkles.push({
-                            x: smoothX + (Math.random() - 0.5) * 10,
-                            y: smoothY + (Math.random() - 0.5) * 10,
-                            size: Math.random() * 3 + 1,
-                            life: 1.0,
-                            color: currentColor
+                            x: smoothX + (Math.random() - 0.5) * 10, y: smoothY + (Math.random() - 0.5) * 10,
+                            size: Math.random() * 3 + 1, life: 1.0, color: currentColor
                         });
                     }
                 }
 
-                // UI Interaction: Color selection via hover
-                const colorBtns = document.querySelectorAll('.color-btn');
-                colorBtns.forEach(btn => {
-                    const rect = btn.getBoundingClientRect();
-                    // Check if pointer is over the button (normalized to client space)
-                    if (rx > rect.left && rx < rect.right && ry > rect.top && ry < rect.bottom) {
-                        btn.style.transform = 'scale(1.2)';
-                        if (isPinching) {
-                            btn.click(); // Trigger click logic
-                        }
-                    } else {
-                        btn.style.transform = '';
-                    }
-                });
-
-                // Subtle Hand visualization for feedback
-                drawConnectors(ctx, lm, HAND_CONNECTIONS, { color: 'rgba(255, 255, 255, 0.1)', lineWidth: 1 });
-                drawLandmarks(ctx, lm, { color: 'rgba(255, 255, 255, 0.2)', lineWidth: 0.5, radius: 1 });
-
+                // Drawing logic
                 if (isPinching) {
                     if (!currentStroke) {
                         currentStroke = {
-                            points: [],
-                            color: currentColor === 'eraser' ? 'rgba(5, 3, 1, 1)' : currentColor,
-                            width: currentLineWidth,
-                            isEraser: currentColor === 'eraser'
+                            points: [], color: currentColor === 'eraser' ? 'rgba(5, 3, 1, 1)' : currentColor,
+                            width: currentLineWidth, isEraser: currentColor === 'eraser'
                         };
                         strokes.push(currentStroke);
                     }
@@ -422,9 +433,12 @@
                     currentStroke = null;
                 }
 
-                // Highlight color selection if hovering top right (UI interaction)
-                // This could be improved but simple hovering over buttons works if we know their screen positions
-                // For now, manual clicking handles color, but let's stick to hand gestures for drawing/sizing.
+                // Feedback
+                statusEl.innerText = isPinching ? "جاري الرسم..." : (isSizeGesture ? "تعديل الحجم" : "تحريك");
+
+                drawConnectors(ctx, lm, HAND_CONNECTIONS, { color: 'rgba(255, 255, 255, 0.1)', lineWidth: 1 });
+                drawLandmarks(ctx, lm, { color: 'rgba(255, 255, 255, 0.2)', lineWidth: 0.5, radius: 1 });
+
             } else {
                 statusEl.innerText = "ابحث عن يد... 🔍";
                 currentStroke = null;
