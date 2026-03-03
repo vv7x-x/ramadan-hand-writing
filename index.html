@@ -1,126 +1,207 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>ramadan pen</title>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <meta charset="UTF-8">
+  <title>Ramadan Air Pen</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+
   <style>
-    body { margin: 0; background: #050301; overflow: hidden; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: radial-gradient(circle at center, #1a1206, #050301);
+    }
     video { display: none; }
-    canvas { width: 100%; height: 100%; transform: scaleX(-1); position: absolute; z-index: 1; }
+    canvas {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      transform: scaleX(-1);
+    }
+    .ui {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #F5D061;
+      font-family: Arial;
+      font-size: 14px;
+      text-align: center;
+      z-index: 10;
+    }
   </style>
 </head>
+
 <body>
-  <video id="vid"></video>
-  <canvas id="c"></canvas>
-  <script>
-    var vid = document.getElementById('vid');
-    var c = document.getElementById('c');
-    var ctx = c.getContext('2d');
-    var arr = [];
-    var cur = [];
-    var shift = false;
-    var draw = false;
-    var sx = null;
-    var sy = null;
 
-    window.onkeydown = function(e) {
-      if (e.key == 'Shift') shift = true;
-      if (e.code == 'Space') arr = [];
+<video id="vid"></video>
+<canvas id="c"></canvas>
+
+<div class="ui">
+  ✨ ضم الإبهام للسبابة للرسم <br>
+  🧹 اضغط C للمسح &nbsp; | &nbsp; 💾 اضغط S للحفظ
+</div>
+
+<script>
+const video = document.getElementById("vid");
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+window.onresize = () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+};
+
+let strokes = [];
+let currentStroke = [];
+let drawing = false;
+let smoothX = null;
+let smoothY = null;
+
+/* ===========================
+   ⭐ Stars Background
+=========================== */
+let stars = [];
+for (let i = 0; i < 100; i++) {
+  stars.push({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    r: Math.random() * 2,
+    speed: Math.random() * 0.3 + 0.1
+  });
+}
+
+function drawStars() {
+  ctx.fillStyle = "rgba(255,255,255,0.8)";
+  stars.forEach(star => {
+    ctx.beginPath();
+    ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
+    ctx.fill();
+    star.y += star.speed;
+    if (star.y > canvas.height) star.y = 0;
+  });
+}
+
+/* ===========================
+   🎨 Drawing Function
+=========================== */
+function render(results) {
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  drawStars();
+
+  ctx.shadowColor = "#F5D061";
+  ctx.shadowBlur = 25;
+  ctx.strokeStyle = "#F5D061";
+  ctx.lineWidth = 7;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  strokes.forEach(stroke => {
+    ctx.beginPath();
+    for (let i = 0; i < stroke.length; i++) {
+      if (i === 0) ctx.moveTo(stroke[i].x, stroke[i].y);
+      else ctx.lineTo(stroke[i].x, stroke[i].y);
     }
-    
-    window.onkeyup = function(e) {
-      if (e.key == 'Shift') shift = false;
+    ctx.stroke();
+  });
+
+  if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+
+    const lm = results.multiHandLandmarks[0];
+    const index = lm[8];
+    const thumb = lm[4];
+
+    const x = index.x * canvas.width;
+    const y = index.y * canvas.height;
+
+    if (smoothX == null) {
+      smoothX = x;
+      smoothY = y;
+    } else {
+      smoothX += (x - smoothX) * 0.4;
+      smoothY += (y - smoothY) * 0.4;
     }
 
-    function run(res) {
-      c.width = window.innerWidth;
-      c.height = window.innerHeight;
-      ctx.drawImage(res.image, 0, 0, c.width, c.height);
-      ctx.fillStyle = 'rgba(10, 6, 2, 0.85)';
-      ctx.fillRect(0, 0, c.width, c.height);
+    // حساب المسافة بين الإبهام والسبابة
+    const dx = thumb.x - index.x;
+    const dy = thumb.y - index.y;
+    const distance = Math.sqrt(dx*dx + dy*dy);
 
-      ctx.shadowColor = '#F5D061';
-      ctx.shadowBlur = 15;
-      ctx.strokeStyle = '#F5D061';
-      ctx.lineWidth = 6;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
+    const pinch = distance < 0.05;
 
-      for (var i = 0; i < arr.length; i++) {
-        ctx.beginPath();
-        for (var j = 0; j < arr[i].length; j++) {
-          if (j == 0) ctx.moveTo(arr[i][j].x, arr[i][j].y);
-          else ctx.lineTo(arr[i][j].x, arr[i][j].y);
-        }
-        ctx.stroke();
+    // مؤشر
+    ctx.beginPath();
+    ctx.arc(smoothX, smoothY, 8, 0, Math.PI * 2);
+    ctx.fillStyle = pinch ? "#FFFFFF" : "rgba(245,208,97,0.5)";
+    ctx.fill();
+
+    if (pinch) {
+      if (!drawing) {
+        drawing = true;
+        currentStroke = [];
+        strokes.push(currentStroke);
       }
-
-      if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
-        var lm = res.multiHandLandmarks[0];
-        drawConnectors(ctx, lm, HAND_CONNECTIONS, {color: 'rgba(245, 208, 97, 0.3)', lineWidth: 2});
-        drawLandmarks(ctx, lm, {color: '#FFFFFF', lineWidth: 1, radius: 2});
-
-        var ind = lm[8];
-        var rx = ind.x * c.width;
-        var ry = ind.y * c.height;
-
-        if (sx == null) {
-          sx = rx; 
-          sy = ry;
-        } else {
-          sx += (rx - sx) * 0.45;
-          sy += (ry - sy) * 0.45;
-        }
-
-        ctx.beginPath();
-        ctx.arc(sx, sy, 6, 0, 2 * Math.PI);
-        if (shift) { 
-          ctx.fillStyle = '#FFFFFF'; 
-        } else { 
-          ctx.fillStyle = 'rgba(245, 208, 97, 0.4)'; 
-        }
-        ctx.fill();
-
-        if (shift) {
-          if (!draw) {
-            draw = true;
-            cur = [];
-            arr.push(cur);
-          }
-          cur.push({x: sx, y: sy});
-        } else {
-          draw = false;
-        }
-      } else {
-        draw = false;
-        sx = null;
-      }
+      currentStroke.push({ x: smoothX, y: smoothY });
+    } else {
+      drawing = false;
     }
 
-    var h = new Hands({
-      locateFile: (file) => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-      }
-    });
-    
-    h.setOptions({ 
-      maxNumHands: 1, 
-      modelComplexity: 1, 
-      minDetectionConfidence: 0.5, 
-      minTrackingConfidence: 0.5 
-    });
-    
-    h.onResults(run);
+  } else {
+    drawing = false;
+    smoothX = null;
+  }
+}
 
-    var cam = new Camera(vid, {
-      onFrame: async () => { await h.send({image: vid}); },
-      width: 1280, 
-      height: 720
-    });
-    
-    cam.start();
-  </script>
+/* ===========================
+   ⌨ Controls
+=========================== */
+window.addEventListener("keydown", (e) => {
+  if (e.key.toLowerCase() === "c") {
+    strokes = [];
+  }
+  if (e.key.toLowerCase() === "s") {
+    const link = document.createElement("a");
+    link.download = "ramadan-drawing.png";
+    link.href = canvas.toDataURL();
+    link.click();
+  }
+});
+
+/* ===========================
+   🖐 MediaPipe Setup
+=========================== */
+const hands = new Hands({
+  locateFile: file =>
+    `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+});
+
+hands.setOptions({
+  maxNumHands: 1,
+  modelComplexity: 1,
+  minDetectionConfidence: 0.6,
+  minTrackingConfidence: 0.6
+});
+
+hands.onResults(render);
+
+const camera = new Camera(video, {
+  onFrame: async () => {
+    await hands.send({ image: video });
+  },
+  width: 1280,
+  height: 720
+});
+
+camera.start();
+</script>
+
 </body>
 </html>
