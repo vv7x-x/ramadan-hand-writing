@@ -1,311 +1,126 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
-
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI Hand Pen Pro | الرسم الذكي</title>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
-        crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600&family=Noto+Sans+Arabic:wght@400;700&display=swap');
-
-        :root {
-            --accent: #F5D061;
-            --bg: #0a0a0c;
-        }
-
-        body {
-            margin: 0;
-            background: var(--bg);
-            overflow: hidden;
-            font-family: 'Noto Sans Arabic', sans-serif;
-            color: white;
-            touch-action: none;
-        }
-
-        video {
-            display: none;
-        }
-
-        canvas {
-            width: 100vw;
-            height: 100vh;
-            display: block;
-            background: #000;
-        }
-
-        /* الطبقة العلوية للواجهة */
-        .hud {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 10;
-        }
-
-        #status {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            background: rgba(0, 0, 0, 0.6);
-            padding: 8px 16px;
-            border-radius: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            font-size: 0.9rem;
-        }
-
-        .palette {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            pointer-events: all;
-        }
-
-        .dot {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            transition: 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .dot.active {
-            border-color: white;
-            transform: scale(1.2);
-            box-shadow: 0 0 20px currentColor;
-        }
-
-        .bottom-bar {
-            position: absolute;
-            bottom: 25px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 15px;
-            pointer-events: all;
-        }
-
-        .btn {
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 12px 24px;
-            border-radius: 14px;
-            backdrop-filter: blur(15px);
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        .btn:active {
-            transform: scale(0.9);
-        }
-
-        .btn-red {
-            color: #ff4d4d;
-            border-color: #ff4d4d;
-        }
-
-        /* تلميحات الحركة */
-        .hints {
-            position: absolute;
-            bottom: 100px;
-            left: 20px;
-            font-size: 0.8rem;
-            opacity: 0.6;
-            line-height: 1.6;
-        }
-    </style>
+  <title>ramadan pen</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <style>
+    body { margin: 0; background: #050301; overflow: hidden; }
+    video { display: none; }
+    canvas { width: 100%; height: 100%; transform: scaleX(-1); position: absolute; z-index: 1; }
+  </style>
 </head>
-
 <body>
-    <canvas id="c"></canvas>
-    <div class="hud">
-        <div id="status">جاري تشغيل النظام... 🚀</div>
+  <video id="vid"></video>
+  <canvas id="c"></canvas>
+  <script>
+    var vid = document.getElementById('vid');
+    var c = document.getElementById('c');
+    var ctx = c.getContext('2d');
+    var arr = [];
+    var cur = [];
+    var shift = false;
+    var draw = false;
+    var sx = null;
+    var sy = null;
 
-        <div class="palette" id="palette">
-            <div class="dot active" style="color: #F5D061; background: #F5D061;" data-color="#F5D061"></div>
-            <div class="dot" style="color: #ff3e3e; background: #ff3e3e;" data-color="#ff3e3e"></div>
-            <div class="dot" style="color: #00ff88; background: #00ff88;" data-color="#00ff88"></div>
-            <div class="dot" style="color: #3e88ff; background: #3e88ff;" data-color="#3e88ff"></div>
-            <div class="dot" style="color: #fff; background: #000; border: 1px solid white;" data-color="eraser">🧼
-            </div>
-        </div>
+    window.onkeydown = function(e) {
+      if (e.key == 'Shift') shift = true;
+      if (e.code == 'Space') arr = [];
+    }
+    
+    window.onkeyup = function(e) {
+      if (e.key == 'Shift') shift = false;
+    }
 
-        <div class="hints">
-            🤏 قرص بالإبهام والسبابة للرسم<br>
-            📏 باعد بين الإبهام والوسطى للحجم<br>
-            🖐️ عدد أصابعك يغير اللون (1-4)<br>
-            🧼 كف مفتوح (5 أصابع) للممحاة
-        </div>
+    function run(res) {
+      c.width = window.innerWidth;
+      c.height = window.innerHeight;
+      ctx.drawImage(res.image, 0, 0, c.width, c.height);
+      ctx.fillStyle = 'rgba(10, 6, 2, 0.85)';
+      ctx.fillRect(0, 0, c.width, c.height);
 
-        <div class="bottom-bar">
-            <button class="btn" onclick="undo()">تراجع ↩️</button>
-            <button class="btn btn-red" onclick="clearAll()">مسح 🗑️</button>
-            <button class="btn" onclick="download()">حفظ 💾</button>
-        </div>
-    </div>
+      ctx.shadowColor = '#F5D061';
+      ctx.shadowBlur = 15;
+      ctx.strokeStyle = '#F5D061';
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
 
-    <video id="vid" playsinline></video>
+      for (var i = 0; i < arr.length; i++) {
+        ctx.beginPath();
+        for (var j = 0; j < arr[i].length; j++) {
+          if (j == 0) ctx.moveTo(arr[i][j].x, arr[i][j].y);
+          else ctx.lineTo(arr[i][j].x, arr[i][j].y);
+        }
+        ctx.stroke();
+      }
 
-    <script>
-        const c = document.getElementById('c');
-        const ctx = c.getContext('2d');
-        const statusEl = document.getElementById('status');
-        const vid = document.getElementById('vid');
+      if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
+        var lm = res.multiHandLandmarks[0];
+        drawConnectors(ctx, lm, HAND_CONNECTIONS, {color: 'rgba(245, 208, 97, 0.3)', lineWidth: 2});
+        drawLandmarks(ctx, lm, {color: '#FFFFFF', lineWidth: 1, radius: 2});
 
-        let strokes = [];
-        let currentStroke = null;
-        let color = '#F5D061';
-        let width = 8;
-        let sparkles = [];
+        var ind = lm[8];
+        var rx = ind.x * c.width;
+        var ry = ind.y * c.height;
 
-        // تنعيم متقدم
-        let sx = null, sy = null;
-        const lerp = (a, b, f) => a + (b - a) * f;
-
-        // ثبات التعرف على الحركات
-        let frameBuffer = [];
-        const BUFFER_SIZE = 5;
-
-        function clearAll() { strokes = []; }
-        function undo() { strokes.pop(); }
-        function download() {
-            const link = document.createElement('a');
-            link.download = 'art.png';
-            link.href = c.toDataURL();
-            link.click();
+        if (sx == null) {
+          sx = rx; 
+          sy = ry;
+        } else {
+          sx += (rx - sx) * 0.45;
+          sy += (ry - sy) * 0.45;
         }
 
-        // اختيار اللون يدوياً أيضاً
-        document.querySelectorAll('.dot').forEach(d => {
-            d.onclick = () => {
-                document.querySelector('.dot.active').classList.remove('active');
-                d.classList.add('active');
-                color = d.dataset.color;
-            };
-        });
-
-        function run(res) {
-            c.width = window.innerWidth;
-            c.height = window.innerHeight;
-
-            // رسم الخلفية (المرآة)
-            ctx.save();
-            ctx.scale(-1, 1);
-            ctx.translate(-c.width, 0);
-            ctx.globalAlpha = 0.4; // جعل الكاميرا خافتة للتركيز على الرسم
-            ctx.drawImage(res.image, 0, 0, c.width, c.height);
-            ctx.restore();
-
-            // رسم الخطوط القديمة بتأثير ناعم
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            strokes.forEach(s => {
-                if (s.pts.length < 2) return;
-                ctx.beginPath();
-                ctx.strokeStyle = s.color === 'eraser' ? '#000' : s.color;
-                ctx.lineWidth = s.w;
-                ctx.moveTo(s.pts[0].x, s.pts[0].y);
-                for (let i = 1; i < s.pts.length; i++) {
-                    ctx.lineTo(s.pts[i].x, s.pts[i].y);
-                }
-                ctx.stroke();
-            });
-
-            if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
-                const hl = res.multiHandLandmarks[0];
-
-                // تحديد موقع المؤشر (السبابة)
-                const tx = (1 - hl[8].x) * c.width;
-                const ty = hl[8].y * c.height;
-
-                // تنعيم فائق (Exponential Smoothing)
-                if (sx === null) { sx = tx; sy = ty; }
-                else { sx = lerp(sx, tx, 0.2); sy = lerp(sy, ty, 0.2); }
-
-                // حساب المسافات للحركات
-                const distPinch = Math.hypot(hl[8].x - hl[4].x, hl[8].y - hl[4].y);
-                const distSize = Math.hypot(hl[12].x - hl[4].x, hl[12].y - hl[4].y);
-
-                const isDrawing = distPinch < 0.04;
-
-                // نظام الحجم التلقائي (تغيير الحجم عند عدم الرسم)
-                if (!isDrawing && distSize < 0.2) {
-                    let nw = distSize * 400;
-                    width = lerp(width, Math.max(2, Math.min(100, nw)), 0.1);
-                }
-
-                // التعرف على عدد الأصابع لتغيير اللون (مع تثبيت)
-                let fingers = 0;
-                [8, 12, 16, 20].forEach(tip => { if (hl[tip].y < hl[tip - 2].y) fingers++; });
-                if (Math.abs(hl[4].x - hl[2].x) > 0.08) fingers++;
-
-                frameBuffer.push(fingers);
-                if (frameBuffer.length > BUFFER_SIZE) frameBuffer.shift();
-
-                const stableFingers = Math.round(frameBuffer.reduce((a, b) => a + b) / frameBuffer.length);
-
-                if (!isDrawing && stableFingers > 0) {
-                    const dots = document.querySelectorAll('.dot');
-                    let targetIdx = stableFingers - 1;
-                    if (targetIdx >= 0 && targetIdx < dots.length) {
-                        dots[targetIdx].click();
-                        statusEl.innerText = stableFingers === 5 ? "الممحاة مفعلة 🧼" : "اللون: " + stableFingers;
-                    }
-                }
-
-                // رسم المؤشر التفاعلي
-                ctx.beginPath();
-                ctx.arc(sx, sy, width / 2 + 5, 0, Math.PI * 2);
-                ctx.strokeStyle = "white";
-                ctx.lineWidth = 2;
-                ctx.stroke();
-
-                if (isDrawing) {
-                    ctx.fillStyle = color === 'eraser' ? 'white' : color;
-                    ctx.fill();
-
-                    if (!currentStroke) {
-                        currentStroke = { pts: [], color: color, w: width };
-                        strokes.push(currentStroke);
-                    }
-                    currentStroke.pts.push({ x: sx, y: sy });
-                    statusEl.innerText = "✨ يرسم الآن...";
-                } else {
-                    currentStroke = null;
-                    if (stableFingers === 0) statusEl.innerText = "تحكم بيدك 👋";
-                }
-
-                // رسم هيكل اليد بشكل خفي جداً للمساعدة
-                drawConnectors(ctx, hl, HAND_CONNECTIONS, { color: 'rgba(255,255,255,0.05)', lineWidth: 1 });
-            } else {
-                statusEl.innerText = "🔍 ابحث عن يدك...";
-                sx = null; sy = null;
-            }
+        ctx.beginPath();
+        ctx.arc(sx, sy, 6, 0, 2 * Math.PI);
+        if (shift) { 
+          ctx.fillStyle = '#FFFFFF'; 
+        } else { 
+          ctx.fillStyle = 'rgba(245, 208, 97, 0.4)'; 
         }
+        ctx.fill();
 
-        const hands = new Hands({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
-        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
-        hands.onResults(run);
+        if (shift) {
+          if (!draw) {
+            draw = true;
+            cur = [];
+            arr.push(cur);
+          }
+          cur.push({x: sx, y: sy});
+        } else {
+          draw = false;
+        }
+      } else {
+        draw = false;
+        sx = null;
+      }
+    }
 
-        const cam = new Camera(vid, {
-            onFrame: async () => { await hands.send({ image: vid }); },
-            width: 1280, height: 720
-        });
-        cam.start();
-    </script>
+    var h = new Hands({
+      locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+      }
+    });
+    
+    h.setOptions({ 
+      maxNumHands: 1, 
+      modelComplexity: 1, 
+      minDetectionConfidence: 0.5, 
+      minTrackingConfidence: 0.5 
+    });
+    
+    h.onResults(run);
+
+    var cam = new Camera(vid, {
+      onFrame: async () => { await h.send({image: vid}); },
+      width: 1280, 
+      height: 720
+    });
+    
+    cam.start();
+  </script>
 </body>
-
 </html>
